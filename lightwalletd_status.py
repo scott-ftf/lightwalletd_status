@@ -65,7 +65,7 @@ for url in server_urls:
     table_rows.append(row)
 
 # Generate a comparison table
-headers = ["Server", "Resolve", "Ping (ms)", "Height", "Status"]
+headers = ["Domain", "Resolve", "Ping (ms)", "Height", "Status"]
 table = tabulate.tabulate(table_rows, headers=headers)
 
 # Print the comparison table
