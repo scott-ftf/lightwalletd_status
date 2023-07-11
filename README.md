@@ -3,9 +3,9 @@
 
 # Pirate Chain Light Wallet Server Status Tool
 
-Use this script to check teh status of the Pirate Chain light wallet servers. It checks that the dmain names are resolvable, tests the server ping time, ensures it can get a gRPC response, and checks the current block height is similar bvetween servers.
+Use this script to validate the status of the Pirate Chain light wallet servers. It checks that the domain names are resolvable, tests the server ping time, ensures it can get a valid gRPC response, and checks the current block height is similar between servers.
 
-1. Install dependencies
+1. Install dependencies (Requires Python 3)
 ```bash
 pip3 install tabulate grpcio-tool
 ```
@@ -20,8 +20,6 @@ cd lightwalletd_status
 ```bash
 python3 lightwalletd_status.py
 ```
-
-
 
 ---
 
