@@ -4,6 +4,8 @@ from lib import service_pb2_grpc
 import socket
 import time
 import tabulate
+import subprocess
+import re
 
 # Define a list of server URLs
 server_urls = [
@@ -17,23 +19,46 @@ server_urls = [
 # Set the ping timeout in seconds
 ping_timeout = 5
 
-# Set the maximum allowed difference in block heights
-max_height_difference = 5
-
 # Create an empty list to store the table rows
 table_rows = []
 
+def icmp_ping(host):
+    try:
+        output = subprocess.check_output("ping -c 1 " + host, shell=True, universal_newlines=True)
+        # Extract the ping time in ms using regex
+        ping_time = float(re.findall(r"time=(\d+.\d+)", output)[0])
+        return ping_time
+    except Exception:
+        return "Unreachable"
+
+
 # Create a secure channel and stub for each server
 print("\nTesting Pirate Light Wallet servers, please standby...\n")
+
+# Create an empty list to store the error logs
+error_logs = []
+
 for url in server_urls:
     row = []
+    host, port = url.split(':')
+    port = int(port)
 
     try:
         # Resolve domain name to IP address
-        ip_address = socket.gethostbyname(url.split(':')[0])
+        ip_address = socket.gethostbyname(host)
         row.append(url)
         row.append(ip_address)
+    except socket.gaierror as e:
+        row.extend([url, "Failed", "N/A", "N/A", "N/A", "Resolve Failed"])
+        error_logs.append(f"Server - {url} - Resolve Failed\n{str(e)}")
+        table_rows.append(row)
+        continue
 
+    # Perform ICMP ping test
+    icmp_result = icmp_ping(host)
+    row.append(icmp_result)
+
+    try:
         # Ping the server to check if it's up
         start_time = time.time()
         channel = grpc.secure_channel(url, grpc.ssl_channel_credentials())
@@ -41,34 +66,44 @@ for url in server_urls:
 
         # Set the timeout for the ping test
         response_future = stub.GetLatestBlock.future(service_pb2.Empty())
-        response = response_future.result(timeout=ping_timeout)
-
+        try:
+            response = response_future.result(timeout=ping_timeout)
+        except Exception as e:
+            raise grpc.FutureTimeoutError(e)
+        
         ping_time = (time.time() - start_time) * 1000  # Convert to milliseconds
         row.append(round(ping_time, 2))
+    except grpc.FutureTimeoutError as e:
+        row.extend(["Timeout", "N/A", "gRPC Response Failed"])
+        error_logs.append(f"Server - {url} - gRPC Response Failed\n{str(e)}")
+        table_rows.append(row)
+        continue
 
-        # Get the current block height
-        block_height = response.height
+    try:
+        # Get server's lightd info
+        response_future = stub.GetLightdInfo.future(service_pb2.Empty())
+        response = response_future.result(timeout=ping_timeout)
+        version = response.version
+        block_height = response.blockHeight
         row.append(block_height)
-
-        # Check block height difference with previous servers
-        for prev_row in table_rows:
-            prev_height = prev_row[3]  # Height is at index 3
-            if abs(block_height - prev_height) > max_height_difference:
-                row.append("WARN (Height out of range)")
-                break
-
-        row.append("UP")
-
-    except (socket.gaierror, grpc.RpcError, grpc.FutureTimeoutError) as e:
-        row.append("DOWN")
+        row.append("OK")
+    except (grpc.RpcError, grpc.FutureTimeoutError) as e:
+        row.extend(["N/A", "N/A", "gRPC Failed"])
+        error_logs.append(f"Server - {url} - gRPC Failed\n{str(e)}")
 
     table_rows.append(row)
 
-# Generate a comparison table
-headers = ["Domain", "Resolve", "Ping (ms)", "Height", "Status"]
-table = tabulate.tabulate(table_rows, headers=headers)
+    # Generate a comparison table
+    headers = ["Domain", "Resolve", "Ping (ms)", "gRPC (ms)", "Height", "Status"]
+    table = tabulate.tabulate(table_rows, headers=headers)
 
 # Print the comparison table
-print("Server Report:")
-print("=================")
+print("\n=================\n")
 print(table)
+
+# Print the error logs
+if error_logs:
+    print("\nError Log:")
+    print("=================\n")
+    for error_log in error_logs:
+        print(error_log)
