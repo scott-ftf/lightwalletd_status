@@ -6,6 +6,9 @@ import time
 import tabulate
 import subprocess
 import re
+import os
+
+DEBUG = False # Turn on debug for extra gRPC output
 
 # Define a list of server URLs
 server_urls = [
@@ -18,6 +21,10 @@ server_urls = [
 
 # Set the ping timeout in seconds
 ping_timeout = 5
+
+# provide more output if DEBUG = True
+os.environ['GRPC_VERBOSITY'] = 'DEBUG' if DEBUG else 'ERROR'
+
 
 # Create an empty list to store the table rows
 table_rows = []
@@ -75,7 +82,8 @@ for url in server_urls:
         row.append(round(ping_time, 2))
     except grpc.FutureTimeoutError as e:
         row.extend(["Timeout", "N/A", "gRPC Response Failed"])
-        error_logs.append(f"Server - {url} - gRPC Response Failed\n{str(e)}")
+        error_message = f"Server - {url} - gRPC Response Failed\n{str(e)}\nCode: {e.code()}\nDetails: {e.details()}"
+        error_logs.append(error_message)
         table_rows.append(row)
         continue
 
@@ -83,7 +91,9 @@ for url in server_urls:
         # Get server's lightd info
         response_future = stub.GetLightdInfo.future(service_pb2.Empty())
         response = response_future.result(timeout=ping_timeout)
-        version = response.version
+        print("Lightwalletd version:", response.version)
+        print("Pirated build version:", response.piratedBuild)
+        print("Pirated subversion:", response.piratedSubversion)
         block_height = response.blockHeight
         row.append(block_height)
         row.append("OK")
@@ -98,7 +108,7 @@ for url in server_urls:
     table = tabulate.tabulate(table_rows, headers=headers)
 
 # Print the comparison table
-print("\n=================\n")
+print("\n\n")
 print(table)
 
 # Print the error logs
