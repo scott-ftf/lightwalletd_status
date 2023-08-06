@@ -91,9 +91,6 @@ for url in server_urls:
         # Get server's lightd info
         response_future = stub.GetLightdInfo.future(service_pb2.Empty())
         response = response_future.result(timeout=ping_timeout)
-        print("Lightwalletd version:", response.version)
-        print("Pirated build version:", response.piratedBuild)
-        print("Pirated subversion:", response.piratedSubversion)
         block_height = response.blockHeight
         row.append(block_height)
         row.append("OK")
