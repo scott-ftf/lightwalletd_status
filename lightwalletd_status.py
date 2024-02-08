@@ -82,6 +82,13 @@ for url in server_urls:
         row.append(round(ping_time, 2))
     except grpc.FutureTimeoutError as e:
         row.extend(["Timeout", "N/A", "gRPC Response Failed"])
+        # FutureTimeoutError does not have code() or details(), so we use a generic message
+        error_message = f"Server - {url} - gRPC Response Failed\n{str(e)}\n"
+        error_logs.append(error_message)
+        table_rows.append(row)
+        continue
+    except grpc.RpcError as e:  # Handling RpcError separately since it has code() and details()
+        row.extend(["gRPC Error", "N/A", "gRPC Response Failed"])
         error_message = f"Server - {url} - gRPC Response Failed\n{str(e)}\nCode: {e.code()}\nDetails: {e.details()}"
         error_logs.append(error_message)
         table_rows.append(row)
